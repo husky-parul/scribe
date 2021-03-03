@@ -2,4 +2,3 @@ resources:
 - ../default
 - ../samples
 - ../scorecard
-- ./mover_scc.yaml

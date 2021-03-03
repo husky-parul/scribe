@@ -43,7 +43,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.4.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
-  name: scribe.v0.1.0
+  name: scribe.v0.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -338,4 +338,4 @@ spec:
   provider:
     name: backube
     url: https://github.com/backube/scribe
-  version: 0.1.0
+  version: 0.0.0
