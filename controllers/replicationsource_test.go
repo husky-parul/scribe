@@ -4,12 +4,14 @@ package controllers
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	scribev1alpha1 "github.com/backube/scribe/api/v1alpha1"
 	snapv1 "github.com/kubernetes-csi/external-snapshotter/v2/pkg/apis/volumesnapshot/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -22,7 +24,7 @@ import (
 //nolint:dupl
 var _ = Describe("Source scheduling", func() {
 	var rs *scribev1alpha1.ReplicationSource
-	logger := zap.LoggerTo(GinkgoWriter, true)
+	logger := zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
 
 	BeforeEach(func() {
 		rs = &scribev1alpha1.ReplicationSource{
@@ -32,6 +34,7 @@ var _ = Describe("Source scheduling", func() {
 
 	Context("When a schedule is specified", func() {
 		var schedule = "0 */2 * * *"
+		metrics := newScribeMetrics(prometheus.Labels{"obj_name": "a", "obj_namespace": "b", "role": "c", "method": "d"})
 		BeforeEach(func() {
 			rs.Spec.Trigger = &scribev1alpha1.ReplicationSourceTriggerSpec{
 				Schedule: &schedule,
@@ -39,53 +42,54 @@ var _ = Describe("Source scheduling", func() {
 		})
 		It("if never synced, sync now", func() {
 			rs.Status.LastSyncTime = nil
-			b, e := awaitNextSyncSource(rs, logger)
+			b, e := awaitNextSyncSource(rs, metrics, logger)
 			Expect(b).To(BeTrue())
 			Expect(e).To(BeNil())
 		})
 		It("if synced long ago, sync now", func() {
 			when := metav1.Time{Time: time.Now().Add(-5 * time.Hour)}
 			rs.Status.LastSyncTime = &when
-			b, e := awaitNextSyncSource(rs, logger)
+			b, e := awaitNextSyncSource(rs, metrics, logger)
 			Expect(b).To(BeTrue())
 			Expect(e).To(BeNil())
 		})
 		It("if recently synced, wait", func() {
 			when := metav1.Time{Time: time.Now().Add(-1 * time.Minute)}
 			rs.Status.LastSyncTime = &when
-			b, e := awaitNextSyncSource(rs, logger)
+			b, e := awaitNextSyncSource(rs, metrics, logger)
 			Expect(b).To(BeFalse())
 			Expect(e).To(BeNil())
 		})
 		It("nextSyncTime will be set", func() {
-			_, _ = awaitNextSyncSource(rs, logger)
+			_, _ = awaitNextSyncSource(rs, metrics, logger)
 			Expect(rs.Status.NextSyncTime).To(Not(BeNil()))
 		})
 	})
 
 	Context("When a schedule is NOT specified", func() {
+		metrics := newScribeMetrics(prometheus.Labels{"obj_name": "a", "obj_namespace": "b", "role": "c", "method": "d"})
 		It("if never synced, sync now", func() {
 			rs.Status.LastSyncTime = nil
-			b, e := awaitNextSyncSource(rs, logger)
+			b, e := awaitNextSyncSource(rs, metrics, logger)
 			Expect(b).To(BeTrue())
 			Expect(e).To(BeNil())
 		})
 		It("if synced long ago, sync now", func() {
 			when := metav1.Time{Time: time.Now().Add(-5 * time.Hour)}
 			rs.Status.LastSyncTime = &when
-			b, e := awaitNextSyncSource(rs, logger)
+			b, e := awaitNextSyncSource(rs, metrics, logger)
 			Expect(b).To(BeTrue())
 			Expect(e).To(BeNil())
 		})
 		It("if recently synced, sync now", func() {
 			when := metav1.Time{Time: time.Now().Add(-1 * time.Minute)}
 			rs.Status.LastSyncTime = &when
-			b, e := awaitNextSyncSource(rs, logger)
+			b, e := awaitNextSyncSource(rs, metrics, logger)
 			Expect(b).To(BeTrue())
 			Expect(e).To(BeNil())
 		})
 		It("nextSyncTime will NOT be set", func() {
-			_, _ = awaitNextSyncSource(rs, logger)
+			_, _ = awaitNextSyncSource(rs, metrics, logger)
 			Expect(rs.Status.NextSyncTime).To(BeNil())
 		})
 	})
@@ -460,6 +464,35 @@ var _ = Describe("ReplicationSource", func() {
 			Consistently(func() error {
 				return k8sClient.Get(ctx, nameFor(svc), svc)
 			}, duration, interval).Should(Not(Succeed()))
+		})
+	})
+
+	Context("when a port is defined", func() {
+		BeforeEach(func() {
+			remotePort := int32(2222)
+			remoteAddr := "my.remote.host.com"
+			rs.Spec.Rsync = &scribev1alpha1.ReplicationSourceRsyncSpec{
+				ReplicationSourceVolumeOptions: scribev1alpha1.ReplicationSourceVolumeOptions{
+					CopyMethod: scribev1alpha1.CopyMethodClone,
+				},
+				Address: &remoteAddr,
+				Port:    &remotePort,
+			}
+		})
+		It("an environment variable is created", func() {
+			job := &batchv1.Job{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: "scribe-rsync-src-" + rs.Name, Namespace: rs.Namespace}, job)
+			}, maxWait, interval).Should(Succeed())
+			port := job.Spec.Template.Spec.Containers[0].Env
+			remotePort := strconv.Itoa(int(2222))
+			found := false
+			for _, v := range port {
+				if v.Value == remotePort {
+					found = true
+				}
+			}
+			Expect(found).To(BeTrue())
 		})
 	})
 
