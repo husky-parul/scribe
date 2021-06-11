@@ -88,24 +88,11 @@ var _ = Describe("ReplicationSource [rclone]", func() {
 
 	Context("when a schedule is not specified", func() {
 		fmt.Printf("%+v\n", rs)
-		var secret *v1.Secret
 		BeforeEach(func() {
-			// create a secret file for rclone
-			secret = &v1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "rclone-secret", // probbly wrong but w/e
-					Namespace: rs.Namespace,
-				},
-				StringData: map[string]string{
-					"rclone.conf": "foo", // from replicationsource_test.go:563
-				},
-			}
-			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 			rs.Spec.Rclone = &scribev1alpha1.ReplicationSourceRcloneSpec{
 				ReplicationSourceVolumeOptions: scribev1alpha1.ReplicationSourceVolumeOptions{
 					CopyMethod: scribev1alpha1.CopyMethodNone,
 				},
-				RcloneConfig: &secret.Name,
 			}
 		})
 		// we should not be syncing again if no schedule is specified
