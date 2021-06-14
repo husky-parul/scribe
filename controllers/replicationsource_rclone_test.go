@@ -7,7 +7,6 @@ import (
 
 	"context"
 	"fmt"
-
 	// snapv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,7 +22,6 @@ import (
 
 //nolint:dupl
 var _ = Describe("ReplicationSource [rclone]", func() {
-	fmt.Printf("Describing the replication source")
 	var ctx = context.Background()
 	var namespace *corev1.Namespace
 	var rs *scribev1alpha1.ReplicationSource
@@ -42,7 +40,6 @@ var _ = Describe("ReplicationSource [rclone]", func() {
 		// crete ns
 		Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
 		Expect(namespace.Name).NotTo(BeEmpty())
-
 		srcPVC = &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "thesource",
@@ -58,7 +55,6 @@ var _ = Describe("ReplicationSource [rclone]", func() {
 			},
 		}
 
-		fmt.Printf("Printing from within the test")
 		rs = &scribev1alpha1.ReplicationSource{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "instance",
@@ -87,17 +83,24 @@ var _ = Describe("ReplicationSource [rclone]", func() {
 	})
 
 	Context("when a schedule is not specified", func() {
-		fmt.Printf("%+v\n", rs)
+		fmt.Printf("Replication Source %+v\n", rs)
 		BeforeEach(func() {
+			// dummy variables taken from https://scribe-replication.readthedocs.io/en/latest/usage/rclone/index.html#source-configuration
+			var configSection = "foo"
+			var destPath = "bar"
+			var config = "foobar"
+			// changing this block from Rsync to Rclone causes the unit
 			rs.Spec.Rclone = &scribev1alpha1.ReplicationSourceRcloneSpec{
 				ReplicationSourceVolumeOptions: scribev1alpha1.ReplicationSourceVolumeOptions{
 					CopyMethod: scribev1alpha1.CopyMethodNone,
 				},
+				RcloneConfigSection: &configSection,
+				RcloneDestPath:      &destPath,
+				RcloneConfig:        &config,
 			}
 		})
 		// we should not be syncing again if no schedule is specified
 		It("the next sync time is nil", func() {
-			fmt.Printf("Enters the test for sync time nil")
 			Consistently(func() bool {
 				// replication source should exist within k8s cluster
 				Expect(k8sClient.Get(ctx, nameFor(rs), rs)).To(Succeed())
@@ -106,7 +109,6 @@ var _ = Describe("ReplicationSource [rclone]", func() {
 				}
 				return true
 			}, duration, interval).Should(BeFalse())
-			fmt.Printf("Exits the nil test")
 		})
 	})
 })
