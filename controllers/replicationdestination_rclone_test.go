@@ -2,12 +2,12 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	scribev1alpha1 "github.com/backube/scribe/api/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -73,10 +73,10 @@ var _ = Describe("ReplicationDestination", func() {
 
 	Context("Just trying to get it to exist hahaha", func() {
 		BeforeEach(func() {
-			fmt.Println("replicationdestination rclone object: %-v")
 			rd.Spec.Rclone = &scribev1alpha1.ReplicationDestinationRcloneSpec{
 				ReplicationDestinationVolumeOptions: scribev1alpha1.ReplicationDestinationVolumeOptions{
-					CopyMethod: scribev1alpha1.CopyMethodNone,
+					CopyMethod:  scribev1alpha1.CopyMethodNone,
+					AccessModes: []corev1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 				},
 				RcloneConfigSection: &rcloneConfigSection,
 				RcloneDestPath:      &rcloneDestPath,
